@@ -1,3 +1,6 @@
+extern alias sharedDataWarehouseInterfaces;
+extern alias asDataWarehouseInterfaces;
+extern alias asAlias;
 using EnvDTE;
 using EnvDTE80;
 using System.Text;
@@ -17,6 +20,7 @@ using BIDSHelper.SSAS;
 
 namespace BIDSHelper.SSIS
 {
+    [FeatureCategory(BIDSFeatureCategories.SSIS)]
     public class DeployPackagesPlugin : BIDSHelperPluginBase
     {
         private CommandBarButton cmdButtonProperties = null;
@@ -151,7 +155,12 @@ namespace BIDSHelper.SSIS
                     bJustDeploySelectedPackages = true;
                 }
 
-                Microsoft.DataWarehouse.Interfaces.IConfigurationSettings settings = (Microsoft.DataWarehouse.Interfaces.IConfigurationSettings)((System.IServiceProvider)projects[0]).GetService(typeof(Microsoft.DataWarehouse.Interfaces.IConfigurationSettings));
+                object settings = projects[0].GetIConfigurationSettings();
+                if (settings == null)
+                {
+                    MessageBox.Show("Could not get IConfigurationSettings");
+                    return;
+                }
                 DataWarehouseProjectManager projectManager = (DataWarehouseProjectManager)settings.GetType().InvokeMember("ProjectManager", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.GetProperty | System.Reflection.BindingFlags.FlattenHierarchy, null, settings, null);
 
                 this.ApplicationObject.ToolWindows.OutputWindow.Parent.SetFocus();
@@ -198,7 +207,12 @@ namespace BIDSHelper.SSIS
 
         private void DeployProject(Project proj, IOutputWindow outputWindow, System.Array selectedItems, bool bCreateBat)
         {
-            Microsoft.DataWarehouse.Interfaces.IConfigurationSettings settings = (Microsoft.DataWarehouse.Interfaces.IConfigurationSettings)((System.IServiceProvider)proj).GetService(typeof(Microsoft.DataWarehouse.Interfaces.IConfigurationSettings));
+            object settings = proj.GetIConfigurationSettings();
+            if (settings == null)
+            {
+                MessageBox.Show("Could not get IConfigurationSettings");
+                return;
+            }
             DataWarehouseProjectManager projectManager = (DataWarehouseProjectManager)settings.GetType().InvokeMember("ProjectManager", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.GetProperty | System.Reflection.BindingFlags.FlattenHierarchy, null, settings, null);
 
             StringBuilder sBatFileContents = new StringBuilder();
@@ -507,9 +521,19 @@ namespace BIDSHelper.SSIS
 
                     Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt proj = GetSelectedProjectReference();
 
-                    if (proj == null || proj.Kind != BIDSProjectKinds.SSIS) return;
+                    if (proj == null || proj.Kind != BIDSProjectKinds.SSIS)
+                    {
+                        CancelDefault = false; //let the Microsoft code fire
+                        return;
+                    }
 
-                    Microsoft.DataWarehouse.Interfaces.IConfigurationSettings settings = (Microsoft.DataWarehouse.Interfaces.IConfigurationSettings)((System.IServiceProvider)proj).GetService(typeof(Microsoft.DataWarehouse.Interfaces.IConfigurationSettings));
+                    object settings = proj.GetIConfigurationSettings();
+                    if (settings == null)
+                    {
+                        CancelDefault = false; //let the Microsoft code fire
+                        return;
+                    }
+
                     projectManager = (Microsoft.DataWarehouse.Project.DataWarehouseProjectManager)settings.GetType().InvokeMember("ProjectManager", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.GetProperty | System.Reflection.BindingFlags.FlattenHierarchy, null, settings, null);
 
                     if (!IsLegacyDeploymentMode(projectManager))
@@ -568,7 +592,8 @@ namespace BIDSHelper.SSIS
         /// <returns>true if the project uses the legacy package deployment model; otherwise else false.</returns>
         public static bool IsLegacyDeploymentMode(Project project)
         {
-            Microsoft.DataWarehouse.Interfaces.IConfigurationSettings settings = (Microsoft.DataWarehouse.Interfaces.IConfigurationSettings)((System.IServiceProvider)project).GetService(typeof(Microsoft.DataWarehouse.Interfaces.IConfigurationSettings));
+            object settings = project.GetIConfigurationSettings();
+            if (settings == null) return false;
             DataWarehouseProjectManager projectManager = (DataWarehouseProjectManager)settings.GetType().InvokeMember("ProjectManager", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.GetProperty | System.Reflection.BindingFlags.FlattenHierarchy, null, settings, null);
             return IsLegacyDeploymentMode(projectManager);
         }

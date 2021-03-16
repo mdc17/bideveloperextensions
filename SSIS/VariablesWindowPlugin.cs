@@ -1,10 +1,12 @@
 namespace BIDSHelper.SSIS
 {
+    extern alias sharedDataWarehouseInterfaces;
+    extern alias asDataWarehouseInterfaces;
     using EnvDTE;
     using EnvDTE80;
     using Microsoft.DataTransformationServices.Design;
     using Microsoft.DataWarehouse.Design;
-    using Microsoft.DataWarehouse.Interfaces;
+    using sharedDataWarehouseInterfaces::Microsoft.DataWarehouse.Interfaces;
     using Microsoft.SqlServer.Dts.Design;
     using Microsoft.SqlServer.Dts.Runtime;
     using Microsoft.SqlServer.Management.UI.Grid;
@@ -17,6 +19,7 @@ namespace BIDSHelper.SSIS
     using System.Windows.Forms;
     using IDTSInfoEventsXX = Microsoft.SqlServer.Dts.Runtime.Wrapper.IDTSInfoEvents100;
 
+    [FeatureCategory(BIDSFeatureCategories.SSIS)]
     public partial class VariablesWindowPlugin : BIDSHelperWindowActivatedPluginBase
     {
         /// <summary>
@@ -38,7 +41,7 @@ namespace BIDSHelper.SSIS
         private ToolBarButton editExpressionButton;
         private ToolBarButton findReferencesButton;
         private ToolBarButton findUnusedButton;
-        private static DlgGridControl grid;
+        private static Microsoft.DataTransformationServices.Controls.DlgGridControl grid;
         private static UserControl variablesToolWindowControl;
         private static IComponentChangeService changesvc;
         private static IDesignerHost serviceProvider;
@@ -106,19 +109,40 @@ namespace BIDSHelper.SSIS
                         continue;
                     }
 
-                    IDesignerToolWindowService service = (IDesignerToolWindowService)designer.GetService(typeof(IDesignerToolWindowService));
-                    if (service == null) continue;
-                    IDesignerToolWindow toolWindow = service.GetToolWindow(new Guid(SSIS_VARIABLES_TOOL_WINDOW_KIND), 0);
-                    if (toolWindow == null) continue;
-                    variablesToolWindowControl = (UserControl)toolWindow.Client; //actually Microsoft.DataTransformationServices.Design.VariablesToolWindow which is internal
 
+                    package.Log.Debug(designer.GetType().FullName + " from " + designer.GetType().Assembly.Location);
+                    package.Log.Debug(typeof(IDesignerToolWindowService).FullName + " from " + typeof(IDesignerToolWindowService).Assembly.Location);
+                    var obj = designer.GetService(typeof(IDesignerToolWindowService));
+                    if (obj != null)
+                        package.Log.Debug(obj.GetType().FullName + " from " + obj.GetType().Assembly.Location);
+                    else
+                        package.Log.Debug("obj is null");
+
+
+
+
+                    IDesignerToolWindowService service = designer.GetService(typeof(IDesignerToolWindowService)) as IDesignerToolWindowService;
+                    if (service == null)
+                    {
+                        asDataWarehouseInterfaces::Microsoft.DataWarehouse.Interfaces.IDesignerToolWindowService service2 = designer.GetService(typeof(asDataWarehouseInterfaces::Microsoft.DataWarehouse.Interfaces.IDesignerToolWindowService)) as asDataWarehouseInterfaces::Microsoft.DataWarehouse.Interfaces.IDesignerToolWindowService;
+                        if (service2 == null) continue;
+                        asDataWarehouseInterfaces::Microsoft.DataWarehouse.Interfaces.IDesignerToolWindow toolWindow = service2.GetToolWindow(new Guid(SSIS_VARIABLES_TOOL_WINDOW_KIND), 0);
+                        if (toolWindow == null) continue;
+                        variablesToolWindowControl = (UserControl)toolWindow.Client; //actually Microsoft.DataTransformationServices.Design.VariablesToolWindow which is internal
+                    }
+                    else
+                    {
+                        IDesignerToolWindow toolWindow = service.GetToolWindow(new Guid(SSIS_VARIABLES_TOOL_WINDOW_KIND), 0);
+                        if (toolWindow == null) continue;
+                        variablesToolWindowControl = (UserControl)toolWindow.Client; //actually Microsoft.DataTransformationServices.Design.VariablesToolWindow which is internal
+                    }
                     serviceProvider = designer;
                     changesvc = (IComponentChangeService)designer.GetService(typeof(IComponentChangeService));
 
                     // Get grid and toolbar
 
                     // "tableLayoutPanelMain" - "tableLayoutPanelVariable" - "dlgGridControl1" | "toolBarVariable"
-                    grid = (DlgGridControl)variablesToolWindowControl.Controls[0].Controls[0].Controls[0];
+                    grid = (Microsoft.DataTransformationServices.Controls.DlgGridControl)variablesToolWindowControl.Controls[0].Controls[0].Controls[0];
                     ToolBar toolbar = (ToolBar)variablesToolWindowControl.Controls[0].Controls[0].Controls[1];
 
                     // If buttons already added, no need to do it again so exit 
@@ -188,25 +212,33 @@ namespace BIDSHelper.SSIS
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message + "\r\n\r\n" + ex.StackTrace, DefaultMessageBoxCaption, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                package.Log.Exception("Problem in HookupVariablesWindow", ex);
+                //MessageBox.Show(ex.Message + "\r\n\r\n" + ex.StackTrace, DefaultMessageBoxCaption, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void grid_MouseButtonClicked(object sender, MouseButtonClickedEventArgs args)
         {
-            // Fragile, as relies on hardcoded index. We are trying to replicate Microsoft.DataTransformationServices.Design.VariablesToolWindow.dlgGridControl1_MouseButtonClicked method check
-            if (args.Button == MouseButtons.Left && args.ColumnIndex == 6)
+            try
             {
-                // Dumbass, the args.RowIndex is a long, but all the grid methods that accept a row index are int!
-                EditExpressionButtonClick((int)args.RowIndex, args.ColumnIndex);
-            }
+                // Fragile, as relies on hardcoded index. We are trying to replicate Microsoft.DataTransformationServices.Design.VariablesToolWindow.dlgGridControl1_MouseButtonClicked method check
+                if (args.Button == MouseButtons.Left && args.ColumnIndex == 6)
+                {
+                    // Dumbass, the args.RowIndex is a long, but all the grid methods that accept a row index are int!
+                    EditExpressionButtonClick((int)args.RowIndex, args.ColumnIndex);
+                }
+            } catch { }
         }
 
         //only way I could find to monitor when row data in the grid changes
         void grid_Invalidated(object sender, InvalidateEventArgs e)
         {
-            CheckButtonIcons();
-            RefreshHighlights();
+            try
+            {
+                CheckButtonIcons();
+                RefreshHighlights();
+            }
+            catch { }
         }
 
         private void CheckButtonIcons()

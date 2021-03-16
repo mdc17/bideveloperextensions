@@ -129,6 +129,35 @@ namespace BIDSHelper.Core
                 this.lblLocalVersion.Text += string.Format(CultureInfo.InvariantCulture, " (Debug Build {0:yyyy-MM-dd HH:mm:ss})", buildDateTime);
 #endif
 
+                this.lblSqlVersion.Text += string.Format("\r\nSSDT Extensions Installed: SSAS ({0}), SSIS ({1}), SSRS ({2})",
+                     (BIDSHelperPackage.SSASExtensionVersion == null ? "N/A" : BIDSHelperPackage.SSASExtensionVersion.ToString()),
+                     (BIDSHelperPackage.SSISExtensionVersion == null ? "N/A" : BIDSHelperPackage.SSISExtensionVersion.ToString()),
+                     (BIDSHelperPackage.SSRSExtensionVersion == null ? "N/A" : BIDSHelperPackage.SSRSExtensionVersion.ToString()));
+
+                //the current BI Developer Extensions version is compatible with the following versions or higher of SSDT extensions
+                Version SSASExpectedVersion = new Version("2.8.15");
+                Version SSRSExpectedVersion = new Version("2.5.9");
+                Version SSISExpectedVersion = new Version("2.1");
+
+                string sUpgradeSSDTMessage = string.Empty;
+                if (BIDSHelperPackage.SSASExtensionVersion != null && BIDSHelperPackage.SSASExtensionVersion < SSASExpectedVersion)
+                {
+                    if (sUpgradeSSDTMessage != string.Empty) sUpgradeSSDTMessage += ", ";
+                    sUpgradeSSDTMessage += "SSAS to " + SSASExpectedVersion;
+                }
+                if (BIDSHelperPackage.SSRSExtensionVersion != null && BIDSHelperPackage.SSRSExtensionVersion < SSRSExpectedVersion)
+                {
+                    if (sUpgradeSSDTMessage != string.Empty) sUpgradeSSDTMessage += ", ";
+                    sUpgradeSSDTMessage += "SSRS to " + SSRSExpectedVersion;
+                }
+                if (BIDSHelperPackage.SSISExtensionVersion != null && BIDSHelperPackage.SSISExtensionVersion < SSISExpectedVersion)
+                {
+                    if (sUpgradeSSDTMessage != string.Empty) sUpgradeSSDTMessage += ", ";
+                    sUpgradeSSDTMessage += "SSIS to " + SSISExpectedVersion;
+                }
+                if (sUpgradeSSDTMessage != string.Empty)
+                    this.lblSqlVersion.Text += "\r\n" + "Please upgrade " + sUpgradeSSDTMessage;
+
                 // First check we have a valid instance, the add-in may be disabled.
                 if (VersionCheckPlugin.Instance == null)
                 {

@@ -9,6 +9,7 @@ using BIDSHelper.Core;
 
 namespace BIDSHelper.SSAS
 {
+    [FeatureCategory(BIDSFeatureCategories.SSASMulti)]
     public class UnusedColumnsPlugin : BIDSHelperPluginBase
     {
         public UnusedColumnsPlugin(BIDSHelperPackage package)
@@ -93,12 +94,14 @@ namespace BIDSHelper.SSAS
 
                 ProjectItem pi = (ProjectItem)hierItem.Object;
                 if (!(pi.Object is DataSourceView)) return false;
-                Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt projExt = (Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt)pi.ContainingProject;
+                //Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt projExt = (Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt)
+                EnvDTE.Project projExt = pi.ContainingProject;
 
                 return (projExt.Kind == BIDSProjectKinds.SSAS); //only show in an SSAS project, not in a report model or SSIS project (which also can have a DSV)
             }
-            catch
+            catch (Exception ex)
             {
+                package.Log.Exception("Error in UnusedColumnsPlugin.ShouldDisplayCommand", ex);
                 return false;
             }
         }
@@ -133,6 +136,11 @@ namespace BIDSHelper.SSAS
                         foreach (Microsoft.AnalysisServices.BackEnd.DataModelingTable table in sandbox.Tables)
                         {
                             if (table.IsCalculated || table.IsPushedData) continue;
+                            if (table.IsStructuredDataSource)
+                            {
+                                MessageBox.Show("BI Developer Extensions does not yet support modern (Power Query) data sources.", "BI Developer Extensions");
+                                return;
+                            }
 
                             //new 1200 models don't appear to have an equivalent of the DSV where the list of columns from the SQL query are cached, so we will have to get the columns from executing (schema only) the SQL query
                             var conn = ((Microsoft.AnalysisServices.BackEnd.RelationalDataStorage)((util.GetDataSourceConnection(util.GetDataSourceID(table.Id), sandbox)))).DataSourceConnection;
@@ -410,6 +418,7 @@ namespace BIDSHelper.SSAS
         }
     }
 
+    [FeatureCategory(BIDSFeatureCategories.SSASMulti)]
     public class UsedColumnsPlugin : BIDSHelperPluginBase
     {
         public UsedColumnsPlugin(BIDSHelperPackage package)
@@ -476,7 +485,8 @@ namespace BIDSHelper.SSAS
 
                 ProjectItem pi = (ProjectItem)hierItem.Object;
                 if (!(pi.Object is DataSourceView)) return false;
-                Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt projExt = (Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt)pi.ContainingProject;
+                //Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt projExt = (Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt)pi.ContainingProject;
+                EnvDTE.Project projExt = pi.ContainingProject;
 
                 return (projExt.Kind == BIDSProjectKinds.SSAS); //only show in an SSAS project, not in a report model or SSIS project (which also can have a DSV)
             }
@@ -515,6 +525,11 @@ namespace BIDSHelper.SSAS
                         foreach (Microsoft.AnalysisServices.BackEnd.DataModelingTable table in sandbox.Tables)
                         {
                             if (table.IsCalculated || table.IsPushedData) continue;
+                            if (table.IsStructuredDataSource)
+                            {
+                                MessageBox.Show("BI Developer Extensions does not yet support modern (Power Query) data sources.", "BI Developer Extensions");
+                                return;
+                            }
 
                             foreach (Microsoft.AnalysisServices.BackEnd.DataModelingColumn col in table.Columns)
                             {

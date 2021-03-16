@@ -1,8 +1,10 @@
-﻿using System;
+﻿extern alias sharedDataWarehouseInterfaces;
+using System;
 using System.Collections.Generic;
 //using System.Linq;
 using System.Text;
 using Microsoft.SqlServer.Dts.Runtime;
+using EnvDTE;
 
 namespace BIDSHelper.SSIS.DesignPracticeScanner
 {
@@ -19,17 +21,12 @@ namespace BIDSHelper.SSIS.DesignPracticeScanner
             Results.Clear();
             string sVisualStudioRelativePath = projectItem.DTE.FullName.Substring(0, projectItem.DTE.FullName.LastIndexOf('\\') + 1);
 
-            bool bOfflineMode = false;
-            try
-            {
-                Microsoft.DataWarehouse.Interfaces.IConfigurationSettings settings = (Microsoft.DataWarehouse.Interfaces.IConfigurationSettings)((System.IServiceProvider)projectItem.ContainingProject).GetService(typeof(Microsoft.DataWarehouse.Interfaces.IConfigurationSettings));
-                bOfflineMode = (bool)settings.GetSetting("OfflineMode");
-            }
-            catch { }
+            bool bOfflineMode = projectItem.ContainingProject.GetOfflineMode();
+
 
 
             List<string> configPaths = new List<string>(package.Configurations.Count);
-            foreach (Configuration c in package.Configurations)
+            foreach (Microsoft.SqlServer.Dts.Runtime.Configuration c in package.Configurations)
             {
                 foreach (PackageConfigurationSetting setting in PackageConfigurationLoader.GetPackageConfigurationSettings(c, package, sVisualStudioRelativePath, bOfflineMode))
                 {

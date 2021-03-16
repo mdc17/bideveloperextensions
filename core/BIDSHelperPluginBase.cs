@@ -1,4 +1,6 @@
-﻿using EnvDTE;
+﻿extern alias asAlias;
+extern alias rsAlias;
+using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
@@ -104,7 +106,15 @@ namespace BIDSHelper.Core
                 }
                 else {
                     package.Log.Verbose("Calling virtual ShouldDisplayCommand to see if we should be displaying this command " + this.GetType().Name);
-                    return ShouldDisplayCommand();
+                    try
+                    {
+                        return ShouldDisplayCommand();
+                    }
+                    catch (Exception ex)
+                    {
+                        this.package.Log.Exception("Error in base class " + this.GetType().Name + " ShouldDisplayCommand", ex);
+                        return false;
+                    }
                 }
             }
             return false;
@@ -123,8 +133,9 @@ namespace BIDSHelper.Core
                 }
                 return false;
             }
-            catch
+            catch (Exception ex)
             {
+                this.package.Log.Exception("Error in base class " + this.GetType().Name + " DisplayCommandInternal(guid)", ex);
                 return false;
             }
         }
@@ -138,10 +149,11 @@ namespace BIDSHelper.Core
                     return false;
 
                 UIHierarchyItem hierItem = ((UIHierarchyItem)((System.Array)solExplorer.SelectedItems).GetValue(0));
-                return (((ProjectItem)hierItem.Object).Object.GetType() == objectType);
+                return hierItem.Object is ProjectItem && ((ProjectItem)hierItem.Object).Object != null && (((ProjectItem)hierItem.Object).Object.GetType() == objectType);
             }
-            catch
+            catch (Exception ex)
             {
+                this.package.Log.Exception("Error in base class " + this.GetType().Name + " DisplayCommandInternal(type)", ex);
                 return false;
             }
         }
@@ -496,7 +508,14 @@ namespace BIDSHelper.Core
 
         private void MenuItemCallback(object sender, EventArgs e)
         {
-            this.Exec();
+            try
+            {
+                this.Exec();
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show(ex.Message + "\r\n" + ex.StackTrace);
+            }
         }
         #endregion
 
@@ -720,6 +739,32 @@ namespace BIDSHelper.Core
         {
             return GetSelectedProjectReference(false);   
         }
+        //protected asAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt 
+        protected EnvDTE.Project GetSelectedProjectReferenceAS()
+        {
+            try
+            {
+                return GetSelectedProjectReferenceAS(false);
+            }
+            catch (Exception ex)
+            {
+                this.package.Log.Exception("Error in " + this.GetType().Name + " GetSelectedProjectReferenceAS", ex);
+                return null;
+            }
+        }
+        //protected rsAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt 
+        protected EnvDTE.Project GetSelectedProjectReferenceRS()
+        {
+            try
+            {
+                return GetSelectedProjectReferenceRS(false);
+            }
+            catch (Exception ex)
+            {
+                this.package.Log.Exception("Error in " + this.GetType().Name + " GetSelectedProjectReferenceAS", ex);
+                return null;
+            }
+        }
 
         protected Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt GetSelectedProjectReference(bool onlyIfFileNotSelected)
         {
@@ -745,6 +790,61 @@ namespace BIDSHelper.Core
                     proj = pi.ContainingProject as Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt;
                 }
                 
+            }
+            return proj;
+        }
+        //protected asAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt 
+        protected EnvDTE.Project GetSelectedProjectReferenceAS(bool onlyIfFileNotSelected)
+        {
+            UIHierarchy solExplorer = this.ApplicationObject.ToolWindows.SolutionExplorer;
+            UIHierarchyItem hierItem = ((UIHierarchyItem)((System.Array)solExplorer.SelectedItems).GetValue(0));
+            asAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt proj = hierItem.Object as asAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt;
+
+            // if a project is in a folder the UIHierarchy object appears to return a project 
+            // wrapped in a ProjectItem so we need to unwrap it to get to the project.
+            if (proj == null && hierItem.Object is ProjectItem)
+            {
+                ProjectItem pi = (ProjectItem)hierItem.Object;
+                if ((pi.Object as asAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt) != null)
+                {
+                    proj = (asAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt)pi.Object;
+                }
+                else if (pi is asAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt)
+                {
+                    proj = pi as asAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt;
+                }
+                else if (!onlyIfFileNotSelected)
+                {
+                    proj = pi.ContainingProject as asAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt;
+                }
+
+            }
+            return proj;
+        }
+        protected rsAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt GetSelectedProjectReferenceRS(bool onlyIfFileNotSelected)
+        {
+            UIHierarchy solExplorer = this.ApplicationObject.ToolWindows.SolutionExplorer;
+            UIHierarchyItem hierItem = ((UIHierarchyItem)((System.Array)solExplorer.SelectedItems).GetValue(0));
+            rsAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt proj = hierItem.Object as rsAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt;
+
+            // if a project is in a folder the UIHierarchy object appears to return a project 
+            // wrapped in a ProjectItem so we need to unwrap it to get to the project.
+            if (proj == null && hierItem.Object is ProjectItem)
+            {
+                ProjectItem pi = (ProjectItem)hierItem.Object;
+                if ((pi.Object as rsAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt) != null)
+                {
+                    proj = (rsAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt)pi.Object;
+                }
+                else if (pi is rsAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt)
+                {
+                    proj = pi as rsAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt;
+                }
+                else if (!onlyIfFileNotSelected)
+                {
+                    proj = pi.ContainingProject as rsAlias::Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt;
+                }
+
             }
             return proj;
         }

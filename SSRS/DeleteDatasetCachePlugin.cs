@@ -7,6 +7,7 @@ using BIDSHelper.Core;
 
 namespace BIDSHelper.SSRS
 {
+    [FeatureCategory(BIDSFeatureCategories.SSRS)]
     public class DeleteDatasetCachePlugin : BIDSHelperPluginBase
     {
         public DeleteDatasetCachePlugin(BIDSHelperPackage package)
@@ -72,20 +73,18 @@ namespace BIDSHelper.SSRS
                     return false;
 
                 UIHierarchyItem hierItem = ((UIHierarchyItem)((System.Array)solExplorer.SelectedItems).GetValue(0));
-                Project p = GetSelectedProjectReference();
+                Project p = GetSelectedProjectReferenceRS();
 
                 SolutionClass solution = hierItem.Object as SolutionClass;
                 if (p != null)
                 {
-                    Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt projExt = (Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt)p;
-                    return (projExt.Kind == BIDSProjectKinds.SSRS);
+                    return (p.Kind == BIDSProjectKinds.SSRS);
                 }
                 else if (solution != null)
                 {
                     foreach (Project pp in solution.Projects)
                     {
-                        Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt projExt = (Microsoft.DataWarehouse.VsIntegration.Shell.Project.Extensibility.ProjectExt)p;
-                        if (projExt.Kind == BIDSProjectKinds.SSRS)
+                        if (p.Kind == BIDSProjectKinds.SSRS)
                             return true;
                     }
                 }
@@ -105,7 +104,7 @@ namespace BIDSHelper.SSRS
                 UIHierarchy solExplorer = this.ApplicationObject.ToolWindows.SolutionExplorer;
                 UIHierarchyItem hierItem = ((UIHierarchyItem)((System.Array)solExplorer.SelectedItems).GetValue(0));
                 SolutionClass solution = hierItem.Object as SolutionClass;
-                Project proj = GetSelectedProjectReference();
+                Project proj = GetSelectedProjectReferenceRS();
 
                 List<string> lstRdls = new List<string>();
                 if (proj != null)

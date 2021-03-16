@@ -15,6 +15,30 @@ using BIDSHelper.Core.VsIntegration;
 using System.Linq;
 using Microsoft.VisualStudio;
 using BIDSHelper.Core.Logger;
+using Task = System.Threading.Tasks.Task;
+
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+namespace mscoree
+{
+    [CompilerGenerated]
+    [Guid("CB2F6722-AB3A-11D2-9C40-00C04FA30A3E")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    [TypeIdentifier]
+    [ComImport]
+    [CLSCompliant(false)]
+    public interface ICorRuntimeHost
+    {
+        void _VtblGap1_11();
+
+        void EnumDomains(out IntPtr enumHandle);
+
+        void NextDomain([In] IntPtr enumHandle, [MarshalAs(UnmanagedType.IUnknown)] out object appDomain);
+
+        void CloseEnum([In] IntPtr enumHandle);
+    }
+}
 
 namespace BIDSHelper
 {
@@ -43,9 +67,9 @@ namespace BIDSHelper
     /// To get loaded into VS, the package must be referred by &lt;Asset Type="Microsoft.VisualStudio.VsPackage" ...&gt; in .vsixmanifest file.
     /// </para>
     /// </remarks>
-    [ProvideAutoLoad("f1536ef8-92ec-443c-9ed7-fdadf150da82")]
+    [ProvideAutoLoad("f1536ef8-92ec-443c-9ed7-fdadf150da82", PackageAutoLoadFlags.BackgroundLoad)]
     //[ProvideAutoLoad(UIContextGuids80.SolutionExists)]
-    [PackageRegistration(UseManagedResourcesOnly = true)]
+    [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [InstalledProductRegistration("#110", "#112", VersionInfo.Version, IconResourceID = 400)] // Info on this package for Help/About
     [Guid(BIDSHelperPackage.PackageGuidString)]
     [SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1650:ElementDocumentationMustBeSpelledCorrectly", Justification = "pkgdef, VS and vsixmanifest are valid VS terms")]
@@ -53,7 +77,7 @@ namespace BIDSHelper
     [ProvideOptionPage(typeof(BIDSHelperOptionsFeatures), "BIDS Helper", "Features", 0, 0, true)]
     [ProvideOptionPage(typeof(BIDSHelperPreferencesDialogPage), "BIDS Helper", "Preferences", 0, 0, true)]
     [ProvideOptionPage(typeof(BIDSHelperOptionsVersion), "BIDS Helper", "Version", 0, 0, true)]
-    public sealed class BIDSHelperPackage : Package, IVsDebuggerEvents
+    public sealed class BIDSHelperPackage : AsyncPackage, IVsDebuggerEvents
     {
         /// <summary>
         /// BidsHelperPackage GUID string.
@@ -75,7 +99,7 @@ namespace BIDSHelper
             // not sited yet inside Visual Studio environment. The place to do all the other
             // initialization is the Initialize method.
         }
-        
+
 
         #region Package Members
 
@@ -83,7 +107,22 @@ namespace BIDSHelper
         /// Initialization of the package; this method is called right after the package is sited, so this is the place
         /// where you can put all the initialization code that rely on services provided by VisualStudio.
         /// </summary>
-        protected override void Initialize()
+        protected override async Task InitializeAsync(System.Threading.CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
+        //protected override void Initialize()
+        {
+            // runs in the background thread and doesn't affect the responsiveness of the UI thread.
+            //await Task.Delay(100);
+            
+            // Switches to the UI thread in order to consume some services used in command initialization
+            await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+
+
+
+            OriginalInitialize();
+
+        }
+
+        private void OriginalInitialize()
         {
             bool bQuitting = false;
             base.Initialize();
@@ -96,9 +135,118 @@ namespace BIDSHelper
             Log.LogLevel = LogLevels.Warning;
 #endif
             Log.Debug("BIDSHelper Package Initialize Starting");
+
+
+            //var bidsHelperPath = new System.IO.FileInfo(typeof(BIDSHelperPackage).Assembly.Location);
+
+//#pragma warning disable 0618 //ignore the fact this is an obsolete method
+//            AppDomain.CurrentDomain.AppendPrivatePath(bidsHelperPath.DirectoryName);
+//            AppDomain.CurrentDomain.SetupInformation.ApplicationBase = bidsHelperPath.DirectoryName;
+//#pragma warning restore 0618
+
+            //(AppDomain.CurrentDomain.SetupInformation.PrivateBinPath + ";" ?? "") + 
+            /*
+             * VS2019
+             * Microsoft Reporting Services Projects (by Microsoft) v2.5.6 717ad572-c4b7-435c-c166-c2969777f718 
+Microsoft Analysis Services Projects (by Microsoft) v2.8.11 04a86fc2-dbd5-4222-848e-911638e487fe 
+
+            VS2017
+            Microsoft Reporting Services Projects (by Microsoft) v2.5.6 717ad572-c4b7-435c-c166-c2969777f718 
+Microsoft Integration Services Projects (by Microsoft) v2.1 D1B09713-C12E-43CC-9EF4-6562298285AB 
+Microsoft Analysis Services Projects (by Microsoft) v2.8.11 04a86fc2-dbd5-4222-848e-911638e487fe 
+
+             */
+            try
+            {
+                System.IServiceProvider serviceProvider = this as System.IServiceProvider;
+                //Microsoft.VisualStudio.ExtensionManager.IVsExtensionManager em =
+                //   (Microsoft.VisualStudio.ExtensionManager.IVsExtensionManager)serviceProvider.GetService(
+                //        typeof(Microsoft.VisualStudio.ExtensionManager.IVsExtensionManager));
+                var em1 =
+                   serviceProvider.GetService(
+                        typeof(Microsoft.VisualStudio.ExtensionManager.SVsExtensionManager));
+                Microsoft.VisualStudio.ExtensionManager.IVsExtensionManager em = em1 as Microsoft.VisualStudio.ExtensionManager.IVsExtensionManager;
+                string result = "";
+                foreach (Microsoft.VisualStudio.ExtensionManager.IInstalledExtension i in em.GetInstalledExtensions())
+                {
+                    try
+                    {
+                        Microsoft.VisualStudio.ExtensionManager.IExtensionHeader h = i.Header;
+                        if (h.Name == "Microsoft Reporting Services Projects" || string.Compare(h.Identifier, "717ad572-c4b7-435c-c166-c2969777f718", true) == 0)
+                        {
+                            SSRSExtensionVersion = h.Version;
+                            SSRSExtensionInstallPath = i.InstallPath;
+                            Log.Debug("SSRS extension v" + h.Version + " is installed at " + i.InstallPath);
+                        }
+                        else if (h.Name == "Microsoft Integration Services Projects" || string.Compare(h.Identifier, "D1B09713-C12E-43CC-9EF4-6562298285AB", true) == 0 //2.2 (VS2017)
+                            || h.Name == "SQL Server Integration Services Projects" || string.Compare(h.Identifier, "851E7A09-7B2B-4F06-A15D-BABFCB26B970", true) == 0 //3.0 (VS2019)
+                            )
+                        {
+                            SSISExtensionVersion = h.Version;
+                            SSISExtensionInstallPath = i.InstallPath;
+                            Log.Debug("SSIS extension v" + h.Version + " is installed at " + i.InstallPath);
+                        }
+                        else if (h.Name == "Microsoft Analysis Services Projects" || string.Compare(h.Identifier, "04a86fc2-dbd5-4222-848e-911638e487fe", true) == 0)
+                        {
+                            SSASExtensionVersion = h.Version;
+                            SSASExtensionInstallPath = i.InstallPath;
+                            Log.Debug("SSAS extension v" + h.Version + " is installed at " + i.InstallPath);
+                        }
+                        else if (h.Name == "Microsoft BI Shared Components for Visual Studio" || string.Compare(h.Identifier, "BAB64743-DA65-4501-B3A3-A73171C73D77", true) == 0)
+                        {
+                            BISharedExtensionInstallPath = i.InstallPath;
+                            Log.Debug("BI Shared extension v" + h.Version + " is installed at " + i.InstallPath);
+                        }
+                        result += h.Name + " (by " + h.Author + ") v" + h.Version + " " + h.Identifier + " " + h.MoreInfoUrl + " " + i.InstallPath + System.Environment.NewLine;
+                    }
+                    catch (Exception ex){ Log.Debug($"Error iterating other extensions: {ex.Message}"); }
+                }
+                Log.Debug(result);
+            }
+            catch (Exception ex) {
+                Log.Debug($"Error getting extension manager: {ex.Message}");
+            }
+
+
             string sAddInTypeName = string.Empty;
             try
             {
+#if !DENALI
+                //given the version numbers seem to be changing frequently, try this approach to increment version numbers of references
+                AppDomain currentDomain = AppDomain.CurrentDomain;
+                currentDomain.AssemblyResolve += new ResolveEventHandler(currentDomain_AssemblyResolve);
+
+
+
+
+                try
+                {
+                    MulticastDelegate handler = (MulticastDelegate)AppDomain.CurrentDomain.GetType().InvokeMember("_AssemblyResolve", System.Reflection.BindingFlags.GetField | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null, AppDomain.CurrentDomain, null);
+                    System.Collections.Generic.List<object> invocationList = new System.Collections.Generic.List<object>(handler.GetInvocationList());
+                    int cnt = invocationList.Count;
+                    for (int i = 0; i < cnt; i++)
+                    {
+                        System.ResolveEventHandler info = (System.ResolveEventHandler)invocationList[i];
+                        Log.Debug(info.Method.ToString() + " - " + info.Method.DeclaringType.ToString());
+                        if (info.Method.DeclaringType.FullName.StartsWith("Microsoft.DataWarehouse.")) //remove this event handler. We will call it from our AssemblyResolve code
+                        {
+                            Log.Debug("removed this AssemblyResolve event handler from the list and will call in our AssemblyResolve event handler");
+                            invocationList.RemoveAt(i);
+                            _microsoftEventHandlersToIgnoreErrors.Add(info);
+                            cnt--;
+                            i--;
+                        }
+                    }
+
+                    typeof(MulticastDelegate).InvokeMember("_invocationList", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.FlattenHierarchy | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.SetField, null, handler, new object[] { invocationList.ToArray() });
+                    typeof(MulticastDelegate).InvokeMember("_invocationCount", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.FlattenHierarchy | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.SetField, null, handler, new object[] { new IntPtr(invocationList.Count) });
+                }
+                catch
+                {
+
+                }
+#endif
+
                 StatusBar = new Core.VsIntegration.StatusBar(this);
                 StatusBar.Text = "Loading BIDSHelper (" + this.GetType().Assembly.GetName().Version.ToString() + ")...";
                 VsShell = (IVsShell)this.GetService(typeof(SVsShell));
@@ -106,12 +254,12 @@ namespace BIDSHelper
 
                 DebuggerService.AdviseDebuggerEvents(this, out debugEventCookie);
 
-                if (SwitchVsixManifest())
-                {
-                    bQuitting = true;
-                    RestartVisualStudio();
-                    return;
-                }
+                //if (SwitchVsixManifest())
+                //{
+                //    bQuitting = true;
+                //    RestartVisualStudio();
+                //    return;
+                //}
 
                 System.Collections.Generic.List<Exception> pluginExceptions = new System.Collections.Generic.List<Exception>();
                 Type[] types = null;
@@ -122,9 +270,20 @@ namespace BIDSHelper
                 catch (ReflectionTypeLoadException loadEx)
                 {
                     types = loadEx.Types; //if some types can't be loaded (possibly because SSIS SSDT isn't installed, just SSAS?) then proceed with the types that work
-                    pluginExceptions.Add(loadEx);
-                    Log.Exception("Problem loading BIDS Helper types list", loadEx);
+                    //pluginExceptions.Add(loadEx); //in testing it appears that this does return the complete list of types so there's no need to display this exception to the user, I don't think since we will individually load plugins below and log exceptions
+                    //Log.Exception("Problem loading BIDS Helper types list", loadEx);
+                    //Log.Error(FormatLoaderException(loadEx));
                 }
+                Log.Debug($"Found {types.Length} types");
+
+                //can be used for debugging which types couldn't be loaded above
+                //for (int i = 0; i < types.Length; i++)
+                //{
+                //    if (types[i] == null)
+                //        Log.Error("types[" + i + "] is null");
+                //    else
+                //        Log.Debug("types[" + i + "]\t" + types[i].FullName);
+                //}
 
                 foreach (Type t in types)
                 {
@@ -135,6 +294,34 @@ namespace BIDSHelper
                         && (!t.IsAbstract))
                     {
                         sAddInTypeName = t.Name;
+
+                        //new... only load SSIS to test this works
+                        //load any not marked
+                        var categoryAttribute = t.GetCustomAttributes(typeof(FeatureCategory), true).FirstOrDefault() as FeatureCategory;
+                        if (categoryAttribute != null)
+                        {
+                            if (SSISExtensionVersion == null && categoryAttribute.Category == BIDSFeatureCategories.SSIS)
+                            {
+                                Log.Verbose(string.Format("Skipping Plugin: {0}", sAddInTypeName));
+                                continue;
+                            }
+                            else if (SSASExtensionVersion == null && (categoryAttribute.Category == BIDSFeatureCategories.SSASMulti || categoryAttribute.Category == BIDSFeatureCategories.SSASTabular))
+                            {
+                                Log.Verbose(string.Format("Skipping Plugin: {0}", sAddInTypeName));
+                                continue;
+                            }
+                            else if (SSRSExtensionVersion == null && categoryAttribute.Category == BIDSFeatureCategories.SSRS)
+                            {
+                                Log.Verbose(string.Format("Skipping Plugin: {0}", sAddInTypeName));
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            Log.Verbose(string.Format("Warning: Plugin FeatureCategory not set: {0}", sAddInTypeName));
+                        }
+
+
                         Log.Verbose(string.Format("Loading Plugin: {0}", sAddInTypeName));
 
                         BIDSHelperPluginBase feature;
@@ -167,41 +354,7 @@ namespace BIDSHelper
                     string sException = "";
                     foreach (Exception pluginEx in pluginExceptions)
                     {
-                        sException += string.Format("BIDS Helper encountered an error when Visual Studio started:\r\n{0}\r\n{1}"
-                        , pluginEx.Message
-                        , pluginEx.StackTrace);
-
-                        Exception innerEx = pluginEx.InnerException;
-                        while (innerEx != null)
-                        {
-                            sException += string.Format("\r\nInner exception:\r\n{0}\r\n{1}"
-                            , innerEx.Message
-                            , innerEx.StackTrace);
-                            innerEx = innerEx.InnerException;
-                        }
-
-                        ReflectionTypeLoadException ex = pluginEx as ReflectionTypeLoadException;
-                        if (ex == null) ex = pluginEx.InnerException as ReflectionTypeLoadException;
-                        if (ex != null)
-                        {
-                            System.Text.StringBuilder sb = new System.Text.StringBuilder();
-                            foreach (Exception exSub in ex.LoaderExceptions)
-                            {
-                                sb.AppendLine();
-                                sb.AppendLine(exSub.Message);
-                                System.IO.FileNotFoundException exFileNotFound = exSub as System.IO.FileNotFoundException;
-                                if (exFileNotFound != null)
-                                {
-                                    if (!string.IsNullOrEmpty(exFileNotFound.FusionLog))
-                                    {
-                                        sb.AppendLine("Fusion Log:");
-                                        sb.AppendLine(exFileNotFound.FusionLog);
-                                    }
-                                }
-                                sb.AppendLine();
-                            }
-                            sException += sb.ToString();
-                        }
+                        sException += FormatLoaderException(pluginEx);
                     }
                     AddInLoadException = new Exception(sException);
                 }
@@ -238,245 +391,290 @@ namespace BIDSHelper
 
         }
 
-        private bool SwitchVsixManifest()
+        public static string FormatLoaderException(Exception pluginEx)
         {
-#if SQL2019
-            string sVersion = VersionInfo.SqlServerVersion.ToString();
-            if (sVersion.StartsWith("14.")) //this BI Dev Extensions DLL is for SQL 2019 but you have SSDT for SQL2017 installed
+            string sException = "";
+            sException += string.Format("BIDS Helper encountered an error when Visual Studio started:\r\n{0}\r\n{1}"
+                , pluginEx.Message
+                , pluginEx.StackTrace);
+
+            Exception innerEx = pluginEx.InnerException;
+            while (innerEx != null)
             {
-                string sFolder = System.IO.Directory.GetParent(Assembly.GetExecutingAssembly().Location).FullName;
-                string sManifestPath = sFolder + "\\extension.vsixmanifest";
-                string sBackupManifestPath = sFolder + "\\extension2019.vsixmanifest";
-                string sOtherManifestPath = sFolder + "\\extension2017.vsixmanifest";
-
-                string sPkgdef2019Path = sFolder + "\\BidsHelper2019.pkgdef";
-                string sPkgdef2019BackupPath = sFolder + "\\BidsHelper2019.pkgdef.bak";
-                string sPkgdef2017Path = sFolder + "\\BidsHelper2017.pkgdef";
-                string sPkgdef2017BackupPath = sFolder + "\\BidsHelper2017.pkgdef.bak";
-
-                string sDll2017Path = sFolder + "\\SQL2017\\BidsHelper2017.dll";
-
-                if (System.IO.File.Exists(sOtherManifestPath) && System.IO.File.Exists(sPkgdef2017BackupPath) && System.IO.File.Exists(sPkgdef2019Path))
-                {
-                    //backup the current SQL2019 manifest
-                    System.IO.File.Copy(sManifestPath, sBackupManifestPath, true);
-
-                    //copy SQL2017 manifest over the current manifest
-                    System.IO.File.Copy(sOtherManifestPath, sManifestPath, true);
-
-                    if (System.IO.File.Exists(sPkgdef2017Path))
-                        System.IO.File.Delete(sPkgdef2017BackupPath);
-                    else
-                        System.IO.File.Move(sPkgdef2017BackupPath, sPkgdef2017Path);
-
-                    if (System.IO.File.Exists(sPkgdef2019BackupPath))
-                        System.IO.File.Delete(sPkgdef2019Path);
-                    else
-                        System.IO.File.Move(sPkgdef2019Path, sPkgdef2019BackupPath);
-
-
-
-                    //VS2017 seems to use the registry after the first run to denote which DLL to launch
-                    //the 15.0* hive is special in that it is actually "C:\Users\<user>\AppData\Local\Microsoft\VisualStudio\15.0_31028247\privateregistry.bin"
-                    //if you want to view this in regedit then close all VS2017 and go to HKEY_LOCAL_MACHINE... File... Load Hive... choose that privateregistry.bin
-                    //remember to click on the new hive folder and do File... Unload Hive before trying to open VS2017
-                    Microsoft.Win32.RegistryKey regKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\VisualStudio\15.0_Config\Packages\{" + PackageGuidString + "}", true);
-                    if (regKey != null)
-                    {
-                        regKey.SetValue("CodeBase", sDll2017Path, Microsoft.Win32.RegistryValueKind.String);
-                        regKey.Close();
-                    }
-
-                    System.Windows.Forms.MessageBox.Show("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed. Please restart Visual Studio so BI Developer Extensions can reconfigure itself to work properly with that version of SSDT.", "BIDS Helper");
-                    return true;
-                }
-                else
-                {
-                    throw new Exception("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed but we couldn't find BIDS Helper 2017 files!");
-                }
+                sException += string.Format("\r\nInner exception:\r\n{0}\r\n{1}"
+                , innerEx.Message
+                , innerEx.StackTrace);
+                innerEx = innerEx.InnerException;
             }
-#elif SQL2017 && VS2017
-            string sVersion = VersionInfo.SqlServerVersion.ToString();
-            if (sVersion.StartsWith("15.")) //this BI Dev Extensions DLL is for SQL 2017 but you have SSDT for SQL2019 installed
+
+            ReflectionTypeLoadException ex = pluginEx as ReflectionTypeLoadException;
+            if (ex == null) ex = pluginEx.InnerException as ReflectionTypeLoadException;
+            if (ex != null)
             {
-                string sFolder = System.IO.Directory.GetParent(System.IO.Directory.GetParent(Assembly.GetExecutingAssembly().Location).FullName).FullName;
-                string sManifestPath = sFolder + "\\extension.vsixmanifest";
-                string sBackupManifestPath = sFolder + "\\extension2017.vsixmanifest";
-                string sOtherManifestPath = sFolder + "\\extension2019.vsixmanifest";
-
-                string sPkgdef2019Path = sFolder + "\\BidsHelper2019.pkgdef";
-                string sPkgdef2019BackupPath = sFolder + "\\BidsHelper2019.pkgdef.bak";
-                string sPkgdef2017Path = sFolder + "\\BidsHelper2017.pkgdef";
-                string sPkgdef2017BackupPath = sFolder + "\\BidsHelper2017.pkgdef.bak";
-
-                string sDll2019Path = sFolder + "\\BidsHelper2019.dll";
-
-                if (System.IO.File.Exists(sOtherManifestPath) && System.IO.File.Exists(sPkgdef2019BackupPath) && System.IO.File.Exists(sPkgdef2017Path))
+                System.Text.StringBuilder sb = new System.Text.StringBuilder();
+                foreach (Exception exSub in ex.LoaderExceptions)
                 {
-                    //backup the current SQL2017 manifest
-                    System.IO.File.Copy(sManifestPath, sBackupManifestPath, true);
-
-                    //copy SQL2019 manifest over the current manifest
-                    System.IO.File.Copy(sOtherManifestPath, sManifestPath, true);
-
-                    if (System.IO.File.Exists(sPkgdef2019Path))
-                        System.IO.File.Delete(sPkgdef2019BackupPath);
-                    else
-                        System.IO.File.Move(sPkgdef2019BackupPath, sPkgdef2019Path);
-
-                    if (System.IO.File.Exists(sPkgdef2017BackupPath))
-                        System.IO.File.Delete(sPkgdef2017Path);
-                    else
-                        System.IO.File.Move(sPkgdef2017Path, sPkgdef2017BackupPath);
-
-                    //VS2017 seems to use the registry after the first run to denote which DLL to launch
-                    //the 15.0* hive is special in that it is actually "C:\Users\<user>\AppData\Local\Microsoft\VisualStudio\15.0_31028247\privateregistry.bin"
-                    //if you want to view this in regedit then close all VS2017 and go to HKEY_LOCAL_MACHINE... File... Load Hive... choose that privateregistry.bin
-                    //remember to click on the new hive folder and do File... Unload Hive before trying to open VS2017
-                    Microsoft.Win32.RegistryKey regKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\VisualStudio\15.0_Config\Packages\{" + PackageGuidString + "}", true);
-                    if (regKey != null)
+                    sb.AppendLine();
+                    sb.AppendLine(exSub.GetType().FullName);
+                    sb.AppendLine(exSub.Message);
+                    sb.AppendLine(exSub.StackTrace);
+                    System.IO.FileNotFoundException exFileNotFound = exSub as System.IO.FileNotFoundException;
+                    if (exFileNotFound != null)
                     {
-                        regKey.SetValue("CodeBase", sDll2019Path, Microsoft.Win32.RegistryValueKind.String);
-                        regKey.Close();
+                        if (!string.IsNullOrEmpty(exFileNotFound.FusionLog))
+                        {
+                            sb.AppendLine("Fusion Log:");
+                            sb.AppendLine(exFileNotFound.FusionLog);
+                        }
+                        sb.AppendLine(string.Format("Source: {0}", exFileNotFound.Source));
+                        sb.AppendLine(string.Format("TargetSite: {0}", exFileNotFound.TargetSite));
                     }
-
-                    System.Windows.Forms.MessageBox.Show("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed. Please restart Visual Studio so BI Developer Extensions can reconfigure itself to work properly with that version of SSDT.", "BIDS Helper");
-                    return true;
+                    sb.AppendLine();
                 }
-                else
-                {
-                    throw new Exception("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed but we couldn't find BIDS Helper 2019 files!");
-                }
+                sException += sb.ToString();
             }
-#elif SQL2017 && !VS2017
-            string sVersion = VersionInfo.SqlServerVersion.ToString();
-            if (sVersion.StartsWith("13.")) //this DLL is for SQL 2017 but you have SSDT for SQL2016 installed
-            {
-                string sFolder = System.IO.Directory.GetParent(Assembly.GetExecutingAssembly().Location).FullName;
-                string sManifestPath = sFolder + "\\extension.vsixmanifest";
-                string sBackupManifestPath = sFolder + "\\extension2017.vsixmanifest";
-                string sOtherManifestPath = sFolder + "\\extension2016.vsixmanifest";
-
-                string sPkgdef2017Path = sFolder + "\\BidsHelper2017.pkgdef";
-                string sPkgdef2017BackupPath = sFolder + "\\BidsHelper2017.pkgdef.bak";
-                string sPkgdef2016Path = sFolder + "\\BidsHelper2016.pkgdef";
-                string sPkgdef2016BackupPath = sFolder + "\\BidsHelper2016.pkgdef.bak";
-
-                string sDll2016Path = sFolder + "\\SQL2016\\BidsHelper2016.dll";
-
-                if (System.IO.File.Exists(sOtherManifestPath) && System.IO.File.Exists(sPkgdef2016BackupPath) && System.IO.File.Exists(sPkgdef2017Path))
-                {
-                    //backup the current SQL2017 manifest
-                    System.IO.File.Copy(sManifestPath, sBackupManifestPath, true);
-
-                    //copy SQL2016 manifest over the current manifest
-                    System.IO.File.Copy(sOtherManifestPath, sManifestPath, true);
-
-                    if (System.IO.File.Exists(sPkgdef2016Path))
-                        System.IO.File.Delete(sPkgdef2016BackupPath);
-                    else
-                        System.IO.File.Move(sPkgdef2016BackupPath, sPkgdef2016Path);
-
-                    if (System.IO.File.Exists(sPkgdef2017BackupPath))
-                        System.IO.File.Delete(sPkgdef2017Path);
-                    else
-                        System.IO.File.Move(sPkgdef2017Path, sPkgdef2017BackupPath);
-
-                    //it looks like some earlier versions of VS2015 use the registry while newer versions of VS2015 (like Update 3) just use the vsixmanifest and pkgdef files?
-                    Microsoft.Win32.RegistryKey regKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\VisualStudio\14.0_Config\Packages\{" + PackageGuidString +"}", true);
-                    if (regKey != null) 
-                    {
-                        regKey.SetValue("CodeBase", sDll2016Path, Microsoft.Win32.RegistryValueKind.String);
-                        regKey.Close();
-                    }
-
-                    System.Windows.Forms.MessageBox.Show("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed. Please restart Visual Studio so BI Developer Extensions can reconfigure itself to work properly with that version of SSDT.", "BIDS Helper");
-                    return true;
-                }
-                else
-                {
-                    throw new Exception("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed but we couldn't find BIDS Helper 2016 files!");
-                }
-            }
-#elif SQL2016 && !VS2017
-            string sVersion = VersionInfo.SqlServerVersion.ToString();
-            if (sVersion.StartsWith("14.")) //this DLL is for SQL 2016 but you have SSDT for SQL2017 installed
-            {
-                string sFolder = System.IO.Directory.GetParent(System.IO.Directory.GetParent(Assembly.GetExecutingAssembly().Location).FullName).FullName;
-                string sManifestPath = sFolder + "\\extension.vsixmanifest";
-                string sBackupManifestPath = sFolder + "\\extension2016.vsixmanifest";
-                string sOtherManifestPath = sFolder + "\\extension2017.vsixmanifest";
-
-                string sPkgdef2017Path = sFolder + "\\BidsHelper2017.pkgdef";
-                string sPkgdef2017BackupPath = sFolder + "\\BidsHelper2017.pkgdef.bak";
-                string sPkgdef2016Path = sFolder + "\\BidsHelper2016.pkgdef";
-                string sPkgdef2016BackupPath = sFolder + "\\BidsHelper2016.pkgdef.bak";
-
-                string sDll2017Path = sFolder + "\\BidsHelper2017.dll";
-
-                if (System.IO.File.Exists(sOtherManifestPath) && System.IO.File.Exists(sPkgdef2017BackupPath) && System.IO.File.Exists(sPkgdef2016Path))
-                {
-                    //backup the current SQL2016 manifest
-                    System.IO.File.Copy(sManifestPath, sBackupManifestPath, true);
-
-                    //copy SQL2017 manifest over the current manifest
-                    System.IO.File.Copy(sOtherManifestPath, sManifestPath, true);
-
-                    if (System.IO.File.Exists(sPkgdef2017Path))
-                        System.IO.File.Delete(sPkgdef2017BackupPath);
-                    else
-                        System.IO.File.Move(sPkgdef2017BackupPath, sPkgdef2017Path);
-
-                    if (System.IO.File.Exists(sPkgdef2016BackupPath))
-                        System.IO.File.Delete(sPkgdef2016Path);
-                    else
-                        System.IO.File.Move(sPkgdef2016Path, sPkgdef2016BackupPath);
-
-                    //it looks like some earlier versions of VS2015 use the registry while newer versions of VS2015 (like Update 3) just use the vsixmanifest and pkgdef files?
-                    Microsoft.Win32.RegistryKey regKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\VisualStudio\14.0_Config\Packages\{" + PackageGuidString +"}", true);
-                    if (regKey != null)
-                    {
-                        regKey.SetValue("CodeBase", sDll2017Path, Microsoft.Win32.RegistryValueKind.String);
-                        regKey.Close();
-                    }
-
-                    System.Windows.Forms.MessageBox.Show("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed. Please restart Visual Studio so BI Developer Extensions can reconfigure itself to work properly with that version of SSDT.", "BIDS Helper");
-                    return true;
-                }
-                else
-                {
-                    throw new Exception("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed but we couldn't find BIDS Helper 2017 files!");
-                }
-            }
-#endif
-            return false;
-
+            return sException;
         }
 
-        private void RestartVisualStudio()
-        {
-            System.Diagnostics.Process currentProcess = System.Diagnostics.Process.GetCurrentProcess();
-            System.Diagnostics.Process newProcess = new System.Diagnostics.Process();
-            newProcess.StartInfo = new System.Diagnostics.ProcessStartInfo {
-                FileName = currentProcess.MainModule.FileName,
-                ErrorDialog = true,
-                UseShellExecute = true,
-                Arguments = DTE2.CommandLineArguments
-            };
-            newProcess.Start();
+//        private bool SwitchVsixManifest()
+//        {
+//#if SQL2019
+//            string sVersion = VersionInfo.SqlServerVersion.ToString();
+//            if (sVersion.StartsWith("14.")) //this BI Dev Extensions DLL is for SQL 2019 but you have SSDT for SQL2017 installed
+//            {
+//                string sFolder = System.IO.Directory.GetParent(Assembly.GetExecutingAssembly().Location).FullName;
+//                string sManifestPath = sFolder + "\\extension.vsixmanifest";
+//                string sBackupManifestPath = sFolder + "\\extension2019.vsixmanifest";
+//                string sOtherManifestPath = sFolder + "\\extension2017.vsixmanifest";
 
-            EnvDTE.Command command = DTE2.Commands.Item("File.Exit", -1);
+//                string sPkgdef2019Path = sFolder + "\\BidsHelper2019.pkgdef";
+//                string sPkgdef2019BackupPath = sFolder + "\\BidsHelper2019.pkgdef.bak";
+//                string sPkgdef2017Path = sFolder + "\\BidsHelper2017.pkgdef";
+//                string sPkgdef2017BackupPath = sFolder + "\\BidsHelper2017.pkgdef.bak";
 
-            if ((command != null) && command.IsAvailable)
-            {
-                DTE2.ExecuteCommand("File.Exit", "");
-            }
-            else
-            {
-                DTE2.Quit();
-            }
+//                string sDll2017Path = sFolder + "\\SQL2017\\BidsHelper2017.dll";
 
-        }
+//                if (System.IO.File.Exists(sOtherManifestPath) && System.IO.File.Exists(sPkgdef2017BackupPath) && System.IO.File.Exists(sPkgdef2019Path))
+//                {
+//                    //backup the current SQL2019 manifest
+//                    System.IO.File.Copy(sManifestPath, sBackupManifestPath, true);
+
+//                    //copy SQL2017 manifest over the current manifest
+//                    System.IO.File.Copy(sOtherManifestPath, sManifestPath, true);
+
+//                    if (System.IO.File.Exists(sPkgdef2017Path))
+//                        System.IO.File.Delete(sPkgdef2017BackupPath);
+//                    else
+//                        System.IO.File.Move(sPkgdef2017BackupPath, sPkgdef2017Path);
+
+//                    if (System.IO.File.Exists(sPkgdef2019BackupPath))
+//                        System.IO.File.Delete(sPkgdef2019Path);
+//                    else
+//                        System.IO.File.Move(sPkgdef2019Path, sPkgdef2019BackupPath);
+
+
+
+//                    //VS2017 seems to use the registry after the first run to denote which DLL to launch
+//                    //the 15.0* hive is special in that it is actually "C:\Users\<user>\AppData\Local\Microsoft\VisualStudio\15.0_31028247\privateregistry.bin"
+//                    //if you want to view this in regedit then close all VS2017 and go to HKEY_LOCAL_MACHINE... File... Load Hive... choose that privateregistry.bin
+//                    //remember to click on the new hive folder and do File... Unload Hive before trying to open VS2017
+//                    Microsoft.Win32.RegistryKey regKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\VisualStudio\15.0_Config\Packages\{" + PackageGuidString + "}", true);
+//                    if (regKey != null)
+//                    {
+//                        regKey.SetValue("CodeBase", sDll2017Path, Microsoft.Win32.RegistryValueKind.String);
+//                        regKey.Close();
+//                    }
+
+//                    System.Windows.Forms.MessageBox.Show("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed. Please restart Visual Studio so BI Developer Extensions can reconfigure itself to work properly with that version of SSDT.", "BIDS Helper");
+//                    return true;
+//                }
+//                else
+//                {
+//                    throw new Exception("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed but we couldn't find BIDS Helper 2017 files!");
+//                }
+//            }
+//#elif SQL2017 && VS2017
+//            string sVersion = VersionInfo.SqlServerVersion.ToString();
+//            if (sVersion.StartsWith("15.")) //this BI Dev Extensions DLL is for SQL 2017 but you have SSDT for SQL2019 installed
+//            {
+//                string sFolder = System.IO.Directory.GetParent(System.IO.Directory.GetParent(Assembly.GetExecutingAssembly().Location).FullName).FullName;
+//                string sManifestPath = sFolder + "\\extension.vsixmanifest";
+//                string sBackupManifestPath = sFolder + "\\extension2017.vsixmanifest";
+//                string sOtherManifestPath = sFolder + "\\extension2019.vsixmanifest";
+
+//                string sPkgdef2019Path = sFolder + "\\BidsHelper2019.pkgdef";
+//                string sPkgdef2019BackupPath = sFolder + "\\BidsHelper2019.pkgdef.bak";
+//                string sPkgdef2017Path = sFolder + "\\BidsHelper2017.pkgdef";
+//                string sPkgdef2017BackupPath = sFolder + "\\BidsHelper2017.pkgdef.bak";
+
+//                string sDll2019Path = sFolder + "\\BidsHelper2019.dll";
+
+//                if (System.IO.File.Exists(sOtherManifestPath) && System.IO.File.Exists(sPkgdef2019BackupPath) && System.IO.File.Exists(sPkgdef2017Path))
+//                {
+//                    //backup the current SQL2017 manifest
+//                    System.IO.File.Copy(sManifestPath, sBackupManifestPath, true);
+
+//                    //copy SQL2019 manifest over the current manifest
+//                    System.IO.File.Copy(sOtherManifestPath, sManifestPath, true);
+
+//                    if (System.IO.File.Exists(sPkgdef2019Path))
+//                        System.IO.File.Delete(sPkgdef2019BackupPath);
+//                    else
+//                        System.IO.File.Move(sPkgdef2019BackupPath, sPkgdef2019Path);
+
+//                    if (System.IO.File.Exists(sPkgdef2017BackupPath))
+//                        System.IO.File.Delete(sPkgdef2017Path);
+//                    else
+//                        System.IO.File.Move(sPkgdef2017Path, sPkgdef2017BackupPath);
+
+//                    //VS2017 seems to use the registry after the first run to denote which DLL to launch
+//                    //the 15.0* hive is special in that it is actually "C:\Users\<user>\AppData\Local\Microsoft\VisualStudio\15.0_31028247\privateregistry.bin"
+//                    //if you want to view this in regedit then close all VS2017 and go to HKEY_LOCAL_MACHINE... File... Load Hive... choose that privateregistry.bin
+//                    //remember to click on the new hive folder and do File... Unload Hive before trying to open VS2017
+//                    Microsoft.Win32.RegistryKey regKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\VisualStudio\15.0_Config\Packages\{" + PackageGuidString + "}", true);
+//                    if (regKey != null)
+//                    {
+//                        regKey.SetValue("CodeBase", sDll2019Path, Microsoft.Win32.RegistryValueKind.String);
+//                        regKey.Close();
+//                    }
+
+//                    System.Windows.Forms.MessageBox.Show("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed. Please restart Visual Studio so BI Developer Extensions can reconfigure itself to work properly with that version of SSDT.", "BIDS Helper");
+//                    return true;
+//                }
+//                else
+//                {
+//                    throw new Exception("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed but we couldn't find BIDS Helper 2019 files!");
+//                }
+//            }
+//#elif SQL2017 && !VS2017
+//            string sVersion = VersionInfo.SqlServerVersion.ToString();
+//            if (sVersion.StartsWith("13.")) //this DLL is for SQL 2017 but you have SSDT for SQL2016 installed
+//            {
+//                string sFolder = System.IO.Directory.GetParent(Assembly.GetExecutingAssembly().Location).FullName;
+//                string sManifestPath = sFolder + "\\extension.vsixmanifest";
+//                string sBackupManifestPath = sFolder + "\\extension2017.vsixmanifest";
+//                string sOtherManifestPath = sFolder + "\\extension2016.vsixmanifest";
+
+//                string sPkgdef2017Path = sFolder + "\\BidsHelper2017.pkgdef";
+//                string sPkgdef2017BackupPath = sFolder + "\\BidsHelper2017.pkgdef.bak";
+//                string sPkgdef2016Path = sFolder + "\\BidsHelper2016.pkgdef";
+//                string sPkgdef2016BackupPath = sFolder + "\\BidsHelper2016.pkgdef.bak";
+
+//                string sDll2016Path = sFolder + "\\SQL2016\\BidsHelper2016.dll";
+
+//                if (System.IO.File.Exists(sOtherManifestPath) && System.IO.File.Exists(sPkgdef2016BackupPath) && System.IO.File.Exists(sPkgdef2017Path))
+//                {
+//                    //backup the current SQL2017 manifest
+//                    System.IO.File.Copy(sManifestPath, sBackupManifestPath, true);
+
+//                    //copy SQL2016 manifest over the current manifest
+//                    System.IO.File.Copy(sOtherManifestPath, sManifestPath, true);
+
+//                    if (System.IO.File.Exists(sPkgdef2016Path))
+//                        System.IO.File.Delete(sPkgdef2016BackupPath);
+//                    else
+//                        System.IO.File.Move(sPkgdef2016BackupPath, sPkgdef2016Path);
+
+//                    if (System.IO.File.Exists(sPkgdef2017BackupPath))
+//                        System.IO.File.Delete(sPkgdef2017Path);
+//                    else
+//                        System.IO.File.Move(sPkgdef2017Path, sPkgdef2017BackupPath);
+
+//                    //it looks like some earlier versions of VS2015 use the registry while newer versions of VS2015 (like Update 3) just use the vsixmanifest and pkgdef files?
+//                    Microsoft.Win32.RegistryKey regKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\VisualStudio\14.0_Config\Packages\{" + PackageGuidString +"}", true);
+//                    if (regKey != null) 
+//                    {
+//                        regKey.SetValue("CodeBase", sDll2016Path, Microsoft.Win32.RegistryValueKind.String);
+//                        regKey.Close();
+//                    }
+
+//                    System.Windows.Forms.MessageBox.Show("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed. Please restart Visual Studio so BI Developer Extensions can reconfigure itself to work properly with that version of SSDT.", "BIDS Helper");
+//                    return true;
+//                }
+//                else
+//                {
+//                    throw new Exception("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed but we couldn't find BIDS Helper 2016 files!");
+//                }
+//            }
+//#elif SQL2016 && !VS2017
+//            string sVersion = VersionInfo.SqlServerVersion.ToString();
+//            if (sVersion.StartsWith("14.")) //this DLL is for SQL 2016 but you have SSDT for SQL2017 installed
+//            {
+//                string sFolder = System.IO.Directory.GetParent(System.IO.Directory.GetParent(Assembly.GetExecutingAssembly().Location).FullName).FullName;
+//                string sManifestPath = sFolder + "\\extension.vsixmanifest";
+//                string sBackupManifestPath = sFolder + "\\extension2016.vsixmanifest";
+//                string sOtherManifestPath = sFolder + "\\extension2017.vsixmanifest";
+
+//                string sPkgdef2017Path = sFolder + "\\BidsHelper2017.pkgdef";
+//                string sPkgdef2017BackupPath = sFolder + "\\BidsHelper2017.pkgdef.bak";
+//                string sPkgdef2016Path = sFolder + "\\BidsHelper2016.pkgdef";
+//                string sPkgdef2016BackupPath = sFolder + "\\BidsHelper2016.pkgdef.bak";
+
+//                string sDll2017Path = sFolder + "\\BidsHelper2017.dll";
+
+//                if (System.IO.File.Exists(sOtherManifestPath) && System.IO.File.Exists(sPkgdef2017BackupPath) && System.IO.File.Exists(sPkgdef2016Path))
+//                {
+//                    //backup the current SQL2016 manifest
+//                    System.IO.File.Copy(sManifestPath, sBackupManifestPath, true);
+
+//                    //copy SQL2017 manifest over the current manifest
+//                    System.IO.File.Copy(sOtherManifestPath, sManifestPath, true);
+
+//                    if (System.IO.File.Exists(sPkgdef2017Path))
+//                        System.IO.File.Delete(sPkgdef2017BackupPath);
+//                    else
+//                        System.IO.File.Move(sPkgdef2017BackupPath, sPkgdef2017Path);
+
+//                    if (System.IO.File.Exists(sPkgdef2016BackupPath))
+//                        System.IO.File.Delete(sPkgdef2016Path);
+//                    else
+//                        System.IO.File.Move(sPkgdef2016Path, sPkgdef2016BackupPath);
+
+//                    //it looks like some earlier versions of VS2015 use the registry while newer versions of VS2015 (like Update 3) just use the vsixmanifest and pkgdef files?
+//                    Microsoft.Win32.RegistryKey regKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\VisualStudio\14.0_Config\Packages\{" + PackageGuidString +"}", true);
+//                    if (regKey != null)
+//                    {
+//                        regKey.SetValue("CodeBase", sDll2017Path, Microsoft.Win32.RegistryValueKind.String);
+//                        regKey.Close();
+//                    }
+
+//                    System.Windows.Forms.MessageBox.Show("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed. Please restart Visual Studio so BI Developer Extensions can reconfigure itself to work properly with that version of SSDT.", "BIDS Helper");
+//                    return true;
+//                }
+//                else
+//                {
+//                    throw new Exception("You have SSDT for SQL Server " + VersionInfo.SqlServerFriendlyVersion + " installed but we couldn't find BIDS Helper 2017 files!");
+//                }
+//            }
+//#endif
+//            return false;
+
+//        }
+
+        //private void RestartVisualStudio()
+        //{
+        //    System.Diagnostics.Process currentProcess = System.Diagnostics.Process.GetCurrentProcess();
+        //    System.Diagnostics.Process newProcess = new System.Diagnostics.Process();
+        //    newProcess.StartInfo = new System.Diagnostics.ProcessStartInfo {
+        //        FileName = currentProcess.MainModule.FileName,
+        //        ErrorDialog = true,
+        //        UseShellExecute = true,
+        //        Arguments = DTE2.CommandLineArguments
+        //    };
+        //    newProcess.Start();
+
+        //    EnvDTE.Command command = DTE2.Commands.Item("File.Exit", -1);
+
+        //    if ((command != null) && command.IsAvailable)
+        //    {
+        //        DTE2.ExecuteCommand("File.Exit", "");
+        //    }
+        //    else
+        //    {
+        //        DTE2.Quit();
+        //    }
+
+        //}
 
 
 #if DENALI
@@ -507,6 +705,199 @@ namespace BIDSHelper
                 return null;
             }
         }
+#else
+        string _recursiveAssemblyResolveNameToSkip = null;
+        System.Collections.Generic.List<string> _assemblyLoadsFailed = new System.Collections.Generic.List<string>();
+        System.Collections.Generic.List<System.ResolveEventHandler> _microsoftEventHandlersToIgnoreErrors = new System.Collections.Generic.List<ResolveEventHandler>();
+        AppDomain _defaultAppDomain = null;
+
+        private static mscoree.ICorRuntimeHost GetCorRuntimeHost()
+        {
+            return (mscoree.ICorRuntimeHost)Activator.CreateInstance(Marshal.GetTypeFromCLSID(new Guid("CB2F6723-AB3A-11D2-9C40-00C04FA30A3E")));
+        }
+
+        public AppDomain GetDefaultAppDomain()
+        {
+            IntPtr enumHandle = IntPtr.Zero;
+            mscoree.ICorRuntimeHost host = GetCorRuntimeHost();
+            try
+            {
+                host.EnumDomains(out enumHandle);
+
+                object domain = null;
+                while (true)
+                {
+                    host.NextDomain(enumHandle, out domain);
+
+                    if (domain == null) break;
+
+                    AppDomain appDomain = (AppDomain)domain;
+                    if (appDomain.IsDefaultAppDomain()) 
+                        return appDomain;
+                }
+                return null;
+            }
+            catch (Exception e)
+            {
+                Log.Debug("Caught error in Microsoft AssemblyResolve and skipped: " + e.Message);
+                return null;
+            }
+            finally
+            {
+                host.CloseEnum(enumHandle);
+                Marshal.ReleaseComObject(host);
+            }
+        }
+
+        /// <summary>
+        /// Only fires if an assembly fails to load. This gives us a chance to redirect to a DLL that does exist.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="args"></param>
+        /// <returns></returns>
+        System.Reflection.Assembly currentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
+        {
+            try
+            {
+                //we removed the Microsoft AssemblyResolve event handler from the list and are now calling theirs at the top of ours
+                //we do this to swallow an error due to a bug in their AssemblyResolve event handler as of May 2020
+                foreach (System.ResolveEventHandler handler in _microsoftEventHandlersToIgnoreErrors)
+                {
+                    try
+                    {
+                        Assembly a = handler.Invoke(sender, args);
+                        if (a != null)
+                            return a;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug("Caught error in Microsoft AssemblyResolve and skipped: " + ex.Message);
+                    }
+                }
+
+                if (_recursiveAssemblyResolveNameToSkip == args.Name)
+                    return null; //skip recursion
+                Log.Debug("AssemblyResolve: " + args.Name);
+                DateTime dtStart = DateTime.Now;
+                if (
+                    args.Name.StartsWith("Microsoft.AnalysisServices")
+                    || args.Name.ToLower().StartsWith("microsoft.sqlserver.")
+                    || args.Name.StartsWith("Microsoft.ReportViewer.")
+                    || args.Name.StartsWith("Microsoft.DataWarehouse")
+                    || args.Name.StartsWith("Microsoft.DataTransformationServices.")
+                )
+                {
+                    var assemblyname = new AssemblyName(args.Name);
+
+                    //first see if this assembly is loaded already... if so, don't scan folders for an assembly... just reuse the previously loaded assembly
+                    foreach (Assembly loadedAlready in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        if (loadedAlready.GetName().Name == assemblyname.Name
+                            && loadedAlready.GetName().Version.Major == assemblyname.Version.Major)
+                            //&& loadedAlready.GetName().Version.Minor == assemblyname.Version.Minor
+                            //&& loadedAlready.GetName().Version.MinorRevision == assemblyname.Version.MinorRevision)
+                            return loadedAlready;
+                    }
+
+                    //if (_defaultAppDomain == null)
+                    //    _defaultAppDomain = GetDefaultAppDomain();
+                    //foreach (Assembly loadedAlready in _defaultAppDomain.GetAssemblies())
+                    //{
+                    //    if (loadedAlready.GetName().Name == assemblyname.Name
+                    //        && loadedAlready.GetName().Version.Major == assemblyname.Version.Major
+                    //        && loadedAlready.GetName().Version.Minor == assemblyname.Version.Minor
+                    //        && loadedAlready.GetName().Version.MinorRevision == assemblyname.Version.MinorRevision)
+                    //        return loadedAlready;
+                    //}
+
+                    System.Collections.Generic.List<string> pathsToCheck = new System.Collections.Generic.List<string>();
+                    var bidsHelperPath = new System.IO.FileInfo(typeof(BIDSHelperPackage).Assembly.Location);
+                    pathsToCheck.Add(bidsHelperPath.DirectoryName + "\\");
+                    if (SSASExtensionInstallPath != null) pathsToCheck.Add(SSASExtensionInstallPath);
+                    if (SSISExtensionInstallPath != null) pathsToCheck.Add(SSISExtensionInstallPath);
+                    if (SSRSExtensionInstallPath != null) pathsToCheck.Add(SSRSExtensionInstallPath);
+                    if (BISharedExtensionInstallPath != null) pathsToCheck.Add(BISharedExtensionInstallPath);
+
+                    //if (SSISExtensionInstallPath != null)
+                    //{
+                    //    foreach (string sPath in System.IO.Directory.GetFiles(SSISExtensionInstallPath, assemblyname.Name + ".dll", System.IO.SearchOption.AllDirectories))
+                    //    {
+                    //        if (!sPath.ToUpper().Contains("\\BISHARED\\")) continue;
+                    //        var assembly = Assembly.Load(System.IO.File.ReadAllBytes(sPath));
+                    //        if (assembly.GetName().Version.Major == assemblyname.Version.Major) //some SSIS subfolders have multiple versions of the assembly... make sure we match the major version number... it appears there may be an assembly redirect in operation, but this is probably safer
+                    //        {
+                    //            Log.Debug("AssemblyResolveSuccessSSIS-BIShared: " + args.Name + " to version " + assembly.GetName().Version.ToString() + " at " + sPath + " in " + DateTime.Now.Subtract(dtStart).TotalMilliseconds + "ms");
+                    //            return assembly;
+                    //        }
+                    //    }
+                    //}
+                    foreach (string extensionfolder in pathsToCheck)
+                    {
+                        string sPath = extensionfolder + assemblyname.Name + ".dll";
+                        if (System.IO.File.Exists(sPath))
+                        {
+                            var assembly = Assembly.LoadFile(sPath);
+                            Log.Debug("AssemblyResolveSuccess: " + args.Name + " to version " + assembly.GetName().Version.ToString() + " at " + sPath + " in " + DateTime.Now.Subtract(dtStart).TotalMilliseconds + "ms");
+                            return assembly;
+                        }
+                    }
+                    if (SSISExtensionInstallPath != null)
+                    {
+                        foreach (string sPath in System.IO.Directory.GetFiles(SSISExtensionInstallPath, assemblyname.Name + ".dll", System.IO.SearchOption.AllDirectories))
+                        {
+                            //if (sPath.ToUpper().Contains("\\BISHARED\\")) continue;
+                            var assembly = Assembly.Load(System.IO.File.ReadAllBytes(sPath));
+                            if (assembly.GetName().Version.Major == assemblyname.Version.Major) //some SSIS subfolders have multiple versions of the assembly... make sure we match the major version number... it appears there may be an assembly redirect in operation, but this is probably safer
+                            {
+                                Log.Debug("AssemblyResolveSuccessSSIS: " + args.Name + " to version " + assembly.GetName().Version.ToString() + " at " + sPath + " in " + DateTime.Now.Subtract(dtStart).TotalMilliseconds + "ms");
+                                return assembly;
+                            }
+                        }
+                    }
+                    Log.Debug("AssemblyResolveFail: " + args.Name + " in " + DateTime.Now.Subtract(dtStart).TotalMilliseconds + "ms");
+                    return null;
+
+                    //Version originalVersion = (Version)assemblyname.Version.Clone();
+                    //for (int i = 0; i < 500; i++)
+                    //{
+                    //    for (int j = 0; j <= (i >= originalVersion.Minor && i <= originalVersion.Minor + 10 ? 5 : 0); j++)
+                    //    {
+                    //        assemblyname.Version = new Version(originalVersion.Major, i, j, 0);
+                    //        string sAssemblyName = assemblyname.ToString();
+                    //        if (_assemblyLoadsFailed.Contains(sAssemblyName)) continue;
+                    //        try
+                    //        {
+                    //            _recursiveAssemblyResolveNameToSkip = sAssemblyName;
+                    //            var assembly = Assembly.Load(assemblyname);
+                    //            System.Diagnostics.Debug.WriteLine("AssemblyResolveSuccess: " + args.Name + " to " + assemblyname.Version + " in " + DateTime.Now.Subtract(dtStart).TotalMilliseconds + "ms");
+                    //            return assembly;
+                    //        }
+                    //        catch
+                    //        {
+                    //            if (!_assemblyLoadsFailed.Contains(sAssemblyName))
+                    //                _assemblyLoadsFailed.Add(sAssemblyName);
+                    //            System.Diagnostics.Debug.WriteLine("AssemblyResolveTried: " + args.Name + " to " + assemblyname.Version + " in " + DateTime.Now.Subtract(dtStart).TotalMilliseconds + "ms");
+                    //        }
+                    //        finally
+                    //        {
+                    //            _recursiveAssemblyResolveNameToSkip = null;
+                    //        }
+                    //    }
+                    //}
+                    //System.Diagnostics.Debug.WriteLine("AssemblyResolveFail: " + args.Name + " in " + DateTime.Now.Subtract(dtStart).TotalMilliseconds + "ms");
+                    //return null;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("Problem during AssemblyResolve in BIDS Helper:\r\n" + ex.Message + "\r\n" + ex.StackTrace);
+                return null;
+            }
+        }
 #endif
 
         public int OnModeChange(DBGMODE mode)
@@ -534,6 +925,13 @@ namespace BIDSHelper
 
         public static Exception AddInLoadException = null;
         private uint debugEventCookie;
+        public static Version SSISExtensionVersion = null;
+        public static Version SSASExtensionVersion = null;
+        public static Version SSRSExtensionVersion = null;
+        public static string SSISExtensionInstallPath = null;
+        public static string SSASExtensionInstallPath = null;
+        public static string SSRSExtensionInstallPath = null;
+        public static string BISharedExtensionInstallPath = null;
 
         internal System.IServiceProvider ServiceProvider { get { return (System.IServiceProvider)this; } }
 
@@ -576,12 +974,19 @@ namespace BIDSHelper
             int hr;
 
             // Get the output window
-            outputWindow = base.GetService(typeof(SVsOutputWindow)) as IVsOutputWindow;
+            if (Microsoft.VisualStudio.Shell.ThreadHelper.CheckAccess())
+                outputWindow = base.GetService(typeof(SVsOutputWindow)) as IVsOutputWindow;
+            else
+            {
+                System.Threading.Tasks.Task<object> task = base.GetServiceAsync(typeof(SVsOutputWindow));
+                task.Wait();
+                outputWindow = task.Result as IVsOutputWindow;
+            }
 
             // The General pane is not created by default. We must force its creation
             //if (guidPane == Microsoft.VisualStudio.VSConstants.OutputWindowPaneGuid.GeneralPane_guid)
             //{
-                hr = outputWindow.CreatePane(guidPane, "BIDS Helper", VISIBLE, DO_NOT_CLEAR_WITH_SOLUTION);
+            hr = outputWindow.CreatePane(guidPane, "BIDS Helper", VISIBLE, DO_NOT_CLEAR_WITH_SOLUTION);
                 Microsoft.VisualStudio.ErrorHandler.ThrowOnFailure(hr);
             //}
 

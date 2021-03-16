@@ -1,17 +1,34 @@
-//using Extensibility;
+#if SQL2019
+extern alias asAlias;
+extern alias sharedDataWarehouseInterfaces;
+extern alias asDataWarehouseInterfaces;
+using asAlias::Microsoft.DataWarehouse.Design;
+using asAlias::Microsoft.DataWarehouse.Controls;
+using sharedDataWarehouseInterfaces::Microsoft.DataWarehouse.Design;
+using asAlias::Microsoft.AnalysisServices.Design;
+using asAlias::Microsoft.DataWarehouse.ComponentModel;
+#else
+using Microsoft.DataWarehouse.Design;
+using Microsoft.DataWarehouse.Controls;
+using Microsoft.AnalysisServices.Design;
+using Microsoft.DataWarehouse.ComponentModel;
+#endif
+
+//using Microsoft.DataWarehouse.Design;
+//using Microsoft.DataWarehouse.Controls;
+
 using EnvDTE;
 using EnvDTE80;
 using System.Windows.Forms;
 using Microsoft.AnalysisServices;
 using System.ComponentModel.Design;
-using Microsoft.DataWarehouse.Design;
-using Microsoft.DataWarehouse.Controls;
 using System;
 using Microsoft.Win32;
 using BIDSHelper.SSAS;
 
 namespace BIDSHelper.SSAS
 {
+    [FeatureCategory(BIDSFeatureCategories.SSASMulti)]
     public class CalcHelpersPlugin : BIDSHelperWindowActivatedPluginBase
     {
         private const System.Reflection.BindingFlags getflags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.GetProperty | System.Reflection.BindingFlags.DeclaredOnly | System.Reflection.BindingFlags.Instance;
@@ -99,7 +116,7 @@ namespace BIDSHelper.SSAS
                 if (designer == null) return;
                 ProjectItem pi = GotFocus.ProjectItem;
                 if ((pi==null) || (!(pi.Object is Cube))) return;
-                EditorWindow win = (EditorWindow)designer.GetService(typeof(Microsoft.DataWarehouse.ComponentModel.IComponentNavigator));
+                EditorWindow win = (EditorWindow)designer.GetService(typeof(IComponentNavigator));
                 VsStyleToolBar toolbar = (VsStyleToolBar)win.SelectedView.GetType().InvokeMember("ToolBar", getflags, null, win.SelectedView, null);
 
                 IntPtr ptr = win.Handle;
@@ -111,7 +128,7 @@ namespace BIDSHelper.SSAS
                     win.ActiveViewChanged += new EventHandler(win_ActiveViewChanged);
                 }
 
-                if (win.SelectedView.MenuItemCommandID.ID == 12899)
+                if (win.SelectedView.MenuItemCommandID.ID == (int)BIDSViewMenuItemCommandID.Calculations)
                 //if (win.SelectedView.Caption == "Calculations")
                 {
 
@@ -119,7 +136,7 @@ namespace BIDSHelper.SSAS
                     bool bFlipScriptViewButton = false;
                     foreach (ToolBarButton b in toolbar.Buttons)
                     {
-                        Microsoft.DataWarehouse.Controls.MenuCommandToolBarButton tbb = b as Microsoft.DataWarehouse.Controls.MenuCommandToolBarButton;
+                        MenuCommandToolBarButton tbb = b as MenuCommandToolBarButton;
                         if (tbb != null && tbb.AssociatedCommandID.ID == (int)BIDSToolbarButtonID.CalculationProperties)
                         //if (b.ToolTipText.StartsWith("Calculation Properties"))
                         {
@@ -203,9 +220,9 @@ namespace BIDSHelper.SSAS
             IDesignerHost designer = (IDesignerHost)ApplicationObject.ActiveWindow.Object;
             if (designer == null) return;
             ProjectItem pi = ApplicationObject.ActiveWindow.ProjectItem;
-            EditorWindow win = (EditorWindow)designer.GetService(typeof(Microsoft.DataWarehouse.ComponentModel.IComponentNavigator));
+            EditorWindow win = (EditorWindow)designer.GetService(typeof(IComponentNavigator));
             
-            if (win.SelectedView.MenuItemCommandID.ID == 12899)
+            if (win.SelectedView.MenuItemCommandID.ID == (int)BIDSViewMenuItemCommandID.Calculations)
             //if (win.SelectedView.Caption == "Calculations")
             {
                 DeployMdxScriptPlugin.Instance.DeployScript(pi, this.ApplicationObject);
@@ -271,11 +288,13 @@ namespace BIDSHelper.SSAS
                 int hotItem = (int)typeof(ToolBar).InvokeMember("hotItem", getflags, null, toolbar, null);
                 ToolBarButton button = toolbar.Buttons[hotItem];
                 //if (button.ToolTipText == "Script View")
-                if(((Microsoft.DataWarehouse.Controls.MenuCommandToolBarButton)button).AssociatedCommandID.ID == (int)BIDSToolbarButtonID.ScriptView)
+                MenuCommandToolBarButton menubutton = button as MenuCommandToolBarButton;
+                if (menubutton == null) return;
+                if (menubutton.AssociatedCommandID.ID == (int)BIDSToolbarButtonID.ScriptView)
                 {
                     ScriptViewDefault = true;
                 }
-                else if (((Microsoft.DataWarehouse.Controls.MenuCommandToolBarButton)button).AssociatedCommandID.ID == (int)BIDSToolbarButtonID.FormView)//if (button.ToolTipText == "Form View")
+                else if (menubutton.AssociatedCommandID.ID == (int)BIDSToolbarButtonID.FormView)//if (button.ToolTipText == "Form View")
                 {
                     ScriptViewDefault = false;
                 }
@@ -290,14 +309,30 @@ namespace BIDSHelper.SSAS
             System.IServiceProvider provider = (System.IServiceProvider)this.ApplicationObject.ActiveWindow.ProjectItem.ContainingProject;
             using (WaitCursor cursor1 = new WaitCursor())
             {
-                IUserPromptService oService = (IUserPromptService)provider.GetService(typeof(IUserPromptService));
-
-                foreach (Type t in System.Reflection.Assembly.GetAssembly(typeof(Microsoft.AnalysisServices.Design.Scripts)).GetTypes())
+                try
                 {
-                    if (t.FullName == "Microsoft.AnalysisServices.Design.Calculations.CalcPropertiesEditorForm")
+                    IUserPromptService oService = (IUserPromptService)provider.GetService(typeof(IUserPromptService));
+
+                    foreach (Type t in System.Reflection.Assembly.GetAssembly(typeof(Scripts)).GetTypes())
                     {
-                        form1 = (Form)t.GetConstructor(new Type[] { typeof(IUserPromptService) }).Invoke(new object[] { oService });
-                        break;
+                        if (t.FullName == "Microsoft.AnalysisServices.Design.Calculations.CalcPropertiesEditorForm")
+                        {
+                            form1 = (Form)t.GetConstructor(new Type[] { typeof(IUserPromptService) }).Invoke(new object[] { oService });
+                            break;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    asDataWarehouseInterfaces::Microsoft.DataWarehouse.Design.IUserPromptService oService = (asDataWarehouseInterfaces::Microsoft.DataWarehouse.Design.IUserPromptService)provider.GetService(typeof(asDataWarehouseInterfaces::Microsoft.DataWarehouse.Design.IUserPromptService));
+
+                    foreach (Type t in System.Reflection.Assembly.GetAssembly(typeof(Scripts)).GetTypes())
+                    {
+                        if (t.FullName == "Microsoft.AnalysisServices.Design.Calculations.CalcPropertiesEditorForm")
+                        {
+                            form1 = (Form)t.GetConstructor(new Type[] { typeof(asDataWarehouseInterfaces::Microsoft.DataWarehouse.Design.IUserPromptService) }).Invoke(new object[] { oService });
+                            break;
+                        }
                     }
                 }
                 if (form1 == null) throw new Exception("Couldn't create instance of CalcPropertiesEditorForm");
@@ -306,7 +341,7 @@ namespace BIDSHelper.SSAS
                 try
                 {
                     //validate the script because deploying an invalid script makes cube unusable
-                    Microsoft.AnalysisServices.Design.Scripts scripts = new Microsoft.AnalysisServices.Design.Scripts(cube);
+                    Scripts scripts = new Scripts(cube);
                     System.Reflection.BindingFlags getflags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.GetField | System.Reflection.BindingFlags.DeclaredOnly | System.Reflection.BindingFlags.Instance;
                     script1 = scripts.GetType().InvokeMember("mdxCodeScript", getflags, null, scripts, null);
                 }

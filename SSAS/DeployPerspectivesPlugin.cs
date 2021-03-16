@@ -1,3 +1,13 @@
+#if SQL2019
+extern alias asAlias;
+using asAlias.Microsoft.DataWarehouse.Controls;
+using asAlias.Microsoft.DataWarehouse.Design;
+using asAlias::Microsoft.DataWarehouse.ComponentModel;
+#else
+using Microsoft.DataWarehouse.Controls;
+using Microsoft.DataWarehouse.Design;
+using Microsoft.DataWarehouse.ComponentModel;
+#endif
 using EnvDTE;
 using EnvDTE80;
 using System.Xml;
@@ -7,13 +17,14 @@ using System.Windows.Forms;
 using System.IO;
 using Microsoft.AnalysisServices;
 using System.ComponentModel.Design;
-using Microsoft.DataWarehouse.Design;
-using Microsoft.DataWarehouse.Controls;
+//using Microsoft.DataWarehouse.Design;
+//using Microsoft.DataWarehouse.Controls;
 using System;
 using BIDSHelper.SSAS;
 
 namespace BIDSHelper.SSAS
 {
+    [FeatureCategory(BIDSFeatureCategories.SSASMulti)]
     public class DeployPerspectivesPlugin : BIDSHelperWindowActivatedPluginBase
     {
         private const System.Reflection.BindingFlags getflags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.GetProperty | System.Reflection.BindingFlags.DeclaredOnly | System.Reflection.BindingFlags.Instance;
@@ -122,7 +133,7 @@ namespace BIDSHelper.SSAS
                 if (designer == null) return;
                 ProjectItem pi = GotFocus.ProjectItem;
                 if ((pi == null) || (!(pi.Object is Cube))) return;
-                EditorWindow win = (EditorWindow)designer.GetService(typeof(Microsoft.DataWarehouse.ComponentModel.IComponentNavigator));
+                EditorWindow win = (EditorWindow)designer.GetService(typeof(IComponentNavigator));
                 VsStyleToolBar toolbar = (VsStyleToolBar)win.SelectedView.GetType().InvokeMember("ToolBar", getflags, null, win.SelectedView, null);
 
                 IntPtr ptr = win.Handle;

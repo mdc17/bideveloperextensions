@@ -1,5 +1,10 @@
 namespace BIDSHelper.SSIS
 {
+
+    extern alias asAlias;
+    extern alias sharedDataWarehouseInterfaces;
+    extern alias asDataWarehouseInterfaces;
+
     using Core;
     using EnvDTE;
     using Microsoft.DataTransformationServices.Design;
@@ -12,6 +17,7 @@ namespace BIDSHelper.SSIS
     using System.Reflection;
     using System.Windows.Forms;
 
+    [FeatureCategory(BIDSFeatureCategories.SSIS)]
     public partial class ParametersWindowPlugin : BIDSHelperWindowActivatedPluginBase
     {
 
@@ -65,11 +71,29 @@ namespace BIDSHelper.SSIS
                 }
 
                 // We want the DtsPackageView, an EditorWindow, Microsoft.DataTransformationServices.Design.DtsPackageView
-                EditorWindow editorWindow = (EditorWindow)designer.GetService(typeof(Microsoft.DataWarehouse.ComponentModel.IComponentNavigator));
-                if (editorWindow == null)
-                    return;
+                object obj = null;
+                try
+                {
+                    obj = designer.GetService(typeof(Microsoft.DataWarehouse.ComponentModel.IComponentNavigator));
+                } catch { }
+                if (obj != null)
+                {
+                    EditorWindow editorWindow = (EditorWindow)obj;
+                    if (editorWindow == null)
+                        return;
 
-                editorWindow.SetTagParametersWindowManager();
+                    editorWindow.SetTagParametersWindowManager();
+                }
+                else
+                {
+                    obj = designer.GetService(typeof(asAlias::Microsoft.DataWarehouse.ComponentModel.IComponentNavigator));
+                    EditorWindow editorWindow = (Microsoft.DataWarehouse.Design.EditorWindow)obj;
+                    if (editorWindow == null)
+                        return;
+
+                    editorWindow.SetTagParametersWindowManager();
+
+                }
             }
             catch (Exception ex)
             {
@@ -132,7 +156,7 @@ namespace BIDSHelper.SSIS
         private ToolBarButton findReferencesButton;
         private ToolBarButton findUnusedButton;
         private UserControl variablesToolWindowControl;
-        private DlgGridControl grid;
+        private Microsoft.DataTransformationServices.Controls.DlgGridControl grid;
         private EditorWindow editorWindow;
         private bool setupComplete;
 
@@ -155,7 +179,7 @@ namespace BIDSHelper.SSIS
             }
 
             EditorWindow.EditorView view = editorWindow.SelectedView;
-            if (view.Caption == "Parameters") // Microsoft.DataTransformationServices.Design.SR.PackageParametersViewCaption
+            if (view != null && view.Caption == "Parameters") // Microsoft.DataTransformationServices.Design.SR.PackageParametersViewCaption
             {
                 object viewControl = view.GetType().InvokeMember("viewControl", ParametersWindowPlugin.getFieldFlags, null, view, null);
                 UserControl control = (UserControl)viewControl; // PackageParametersControl
@@ -198,7 +222,7 @@ namespace BIDSHelper.SSIS
             toolbar.Wrappable = false;
 
             // "tableLayoutPanelMain" - "tableLayoutPanelParameter" - "parameterGridControl"
-            grid = (DlgGridControl)variablesToolWindowControl.Controls[0].Controls[1].Controls[0];
+            grid = (Microsoft.DataTransformationServices.Controls.DlgGridControl)variablesToolWindowControl.Controls[0].Controls[1].Controls[0];
             grid.SelectionChanged += new SelectionChangedEventHandler(grid_SelectionChanged);
             grid.Invalidated += new InvalidateEventHandler(grid_Invalidated);
 

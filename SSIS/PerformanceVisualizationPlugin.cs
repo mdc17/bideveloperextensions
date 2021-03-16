@@ -13,6 +13,7 @@ using BIDSHelper.Core;
 
 namespace BIDSHelper.SSIS
 {
+    [FeatureCategory(BIDSFeatureCategories.SSIS)]
     public class PerformanceVisualizationPlugin : BIDSHelperPluginBase
     {
         //private DTEEvents events;
@@ -156,6 +157,7 @@ namespace BIDSHelper.SSIS
                     return;
                 }
                 Package package = (Package)win.PropertiesLinkComponent;
+                PackageHelper.SetTargetServerVersion(package);
 
                 EditorWindow.EditorView view = null;
                 if (PerformanceEditorViews.ContainsKey(win))

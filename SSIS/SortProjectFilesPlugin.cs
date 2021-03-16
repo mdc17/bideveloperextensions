@@ -1,6 +1,7 @@
+extern alias sharedDataWarehouseInterfaces;
 using BIDSHelper.Core;
 using EnvDTE;
-using Microsoft.DataWarehouse.Interfaces;
+using sharedDataWarehouseInterfaces::Microsoft.DataWarehouse.Interfaces;
 using Microsoft.DataWarehouse.Project;
 using Microsoft.DataWarehouse.VsIntegration.Hierarchy;
 using Microsoft.DataWarehouse.VsIntegration.Shell.Project;
@@ -15,6 +16,7 @@ namespace BIDSHelper.SSIS
     /// This persistence only works on projects which use the older Package deployment model. 
     /// The sorting itself works on newer Project deployment model projects but it doesn't get saved, so no benefit over native SSDT sorting.
     /// </summary>
+    [FeatureCategory(BIDSFeatureCategories.SSIS)]
     public class SortProjectFilesPlugin : BIDSHelperPluginBase
     {
         public SortProjectFilesPlugin(BIDSHelperPackage package)
@@ -118,8 +120,7 @@ namespace BIDSHelper.SSIS
                 children.Sort();
 
                 // Mark the project as dirty
-                var settings =
-                    (IConfigurationSettings) ((IServiceProvider) p).GetService(typeof (IConfigurationSettings));
+                var settings = p.GetIConfigurationSettings();
                 var projectManager =
                     (DataWarehouseProjectManager)
                         settings.GetType()
